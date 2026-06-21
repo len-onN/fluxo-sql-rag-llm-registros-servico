@@ -6,6 +6,7 @@ from app.aplicacao.casos_de_uso import (
     ListarRegistrosServico,
     ReindexarRegistrosPendentes,
 )
+from app.aplicacao.servicos import MontadorPromptRAG, PoliticaContextoRAG
 from app.dominio.portas import CatalogoModelos, GeradorEmbeddings, GeradorResposta, SeletorModelo
 from app.infraestrutura.banco_sqlite import BancoSQLite
 from app.infraestrutura.provedores_llm import EstadoProvedoresAtivos, criar_componentes_provedores
@@ -32,6 +33,13 @@ def criar_container(configuracoes: Configuracoes) -> ContainerAplicacao:
     repositorio_registros = RepositorioSQLiteRegistros(banco)
     repositorio_vetorial = RepositorioVetorialChroma(configuracoes.diretorio_chroma)
     provedores = criar_componentes_provedores(configuracoes)
+    politica_contexto = PoliticaContextoRAG(
+        top_k_padrao=configuracoes.limite_contexto,
+        distancia_maxima=configuracoes.limiar_distancia_contexto,
+        pontuacao_minima=configuracoes.limiar_pontuacao_contexto,
+        orcamento_caracteres=configuracoes.orcamento_contexto_caracteres,
+    )
+    montador_prompt = MontadorPromptRAG()
 
     return ContainerAplicacao(
         criar_registro_servico=CriarRegistroServico(
@@ -51,6 +59,8 @@ def criar_container(configuracoes: Configuracoes) -> ContainerAplicacao:
             repositorio_vetorial=repositorio_vetorial,
             gerador_embeddings=provedores.gerador_embeddings,
             gerador_resposta=provedores.gerador_resposta,
+            politica_contexto=politica_contexto,
+            montador_prompt=montador_prompt,
         ),
         gerador_embeddings=provedores.gerador_embeddings,
         gerador_resposta=provedores.gerador_resposta,
