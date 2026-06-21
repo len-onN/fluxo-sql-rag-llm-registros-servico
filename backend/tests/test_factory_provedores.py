@@ -19,6 +19,12 @@ from app.infraestrutura.provedores_llm.openai_compativel import (
     GeradorRespostaOpenAICompativel,
     SeletorModeloOpenAICompativel,
 )
+from app.infraestrutura.provedores_llm.ollama import (
+    CatalogoModelosOllama,
+    GeradorEmbeddingsOllama,
+    GeradorRespostaOllama,
+    SeletorModeloOllama,
+)
 from app.nucleo.configuracoes import Configuracoes
 from app.nucleo.erros import ProvedorNaoSuportado
 
@@ -76,6 +82,31 @@ class FactoryProvedoresTest(unittest.TestCase):
             },
         )
 
+    def test_monta_componentes_ollama_por_configuracao(self) -> None:
+        componentes = criar_componentes_provedores(
+            configuracoes_teste(
+                provedor_chat=" ollama ",
+                provedor_embeddings="ollama",
+                modelo_chat="llama3.2",
+                modelo_embedding="nomic-embed-text",
+                ollama_base_url="http://ollama.local:11434",
+            )
+        )
+
+        self.assertIsInstance(componentes.gerador_embeddings, GeradorEmbeddingsOllama)
+        self.assertIsInstance(componentes.gerador_resposta, GeradorRespostaOllama)
+        self.assertIsInstance(componentes.catalogo_modelos, CatalogoModelosOllama)
+        self.assertIsInstance(componentes.seletor_modelo, SeletorModeloOllama)
+        self.assertEqual(
+            componentes.estado.como_dict(),
+            {
+                "provedor_chat": "ollama",
+                "provedor_embeddings": "ollama",
+                "modelo_chat": "llama3.2",
+                "modelo_embedding": "nomic-embed-text",
+            },
+        )
+
     def test_rejeita_provedor_chat_desconhecido_com_erro_amigavel(self) -> None:
         with self.assertRaises(ProvedorNaoSuportado) as contexto:
             criar_componentes_provedores(configuracoes_teste(provedor_chat="gemini"))
@@ -84,14 +115,16 @@ class FactoryProvedoresTest(unittest.TestCase):
         self.assertEqual(contexto.exception.provedor, "gemini")
         self.assertIn("lm_studio", str(contexto.exception))
         self.assertIn("openai_compativel", str(contexto.exception))
+        self.assertIn("ollama", str(contexto.exception))
 
     def test_rejeita_provedor_embeddings_desconhecido_com_erro_amigavel(self) -> None:
         with self.assertRaises(ProvedorNaoSuportado) as contexto:
-            criar_componentes_provedores(configuracoes_teste(provedor_embeddings="ollama"))
+            criar_componentes_provedores(configuracoes_teste(provedor_embeddings="gemini"))
 
         self.assertEqual(contexto.exception.capacidade, "embeddings")
-        self.assertEqual(contexto.exception.provedor, "ollama")
+        self.assertEqual(contexto.exception.provedor, "gemini")
         self.assertIn("lm_studio", str(contexto.exception))
+        self.assertIn("ollama", str(contexto.exception))
 
 
 class ResolvedorModeloChatLMStudioTest(unittest.TestCase):

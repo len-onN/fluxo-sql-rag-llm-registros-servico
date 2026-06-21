@@ -21,6 +21,15 @@ from app.infraestrutura.provedores_llm.openai_compativel import (
     SeletorModeloOpenAICompativel,
 )
 from app.infraestrutura.provedores_llm.openai_compativel.cliente import PROVEDOR as PROVEDOR_OPENAI_COMPATIVEL
+from app.infraestrutura.provedores_llm.ollama import (
+    CatalogoModelosOllama,
+    ClienteOllama,
+    GeradorEmbeddingsOllama,
+    GeradorRespostaOllama,
+    ResolvedorModeloChatOllama,
+    SeletorModeloOllama,
+)
+from app.infraestrutura.provedores_llm.ollama.cliente import PROVEDOR as PROVEDOR_OLLAMA
 from app.nucleo.configuracoes import Configuracoes
 from app.nucleo.erros import ProvedorNaoSuportado
 
@@ -75,6 +84,13 @@ class _ComponentesOpenAICompativel:
     catalogo_modelos: CatalogoModelosOpenAICompativel
 
 
+@dataclass(slots=True)
+class _ComponentesOllama:
+    cliente: ClienteOllama
+    resolvedor_modelo_chat: ResolvedorModeloChatOllama
+    catalogo_modelos: CatalogoModelosOllama
+
+
 ConstrutorChat = Callable[[], ComponentesChat]
 ConstrutorEmbeddings = Callable[[], ComponentesEmbeddings]
 
@@ -84,13 +100,16 @@ class RegistroProvedores:
         self._configuracoes = configuracoes
         self._lm_studio: _ComponentesLMStudio | None = None
         self._openai_compativel: _ComponentesOpenAICompativel | None = None
+        self._ollama: _ComponentesOllama | None = None
         self._provedores_chat: dict[str, ConstrutorChat] = {
             PROVEDOR_LM_STUDIO: self._criar_chat_lm_studio,
             PROVEDOR_OPENAI_COMPATIVEL: self._criar_chat_openai_compativel,
+            PROVEDOR_OLLAMA: self._criar_chat_ollama,
         }
         self._provedores_embeddings: dict[str, ConstrutorEmbeddings] = {
             PROVEDOR_LM_STUDIO: self._criar_embeddings_lm_studio,
             PROVEDOR_OPENAI_COMPATIVEL: self._criar_embeddings_openai_compativel,
+            PROVEDOR_OLLAMA: self._criar_embeddings_ollama,
         }
 
     def criar(self) -> ComponentesProvedores:
@@ -178,6 +197,31 @@ class RegistroProvedores:
             ),
         )
 
+    def _criar_chat_ollama(self) -> ComponentesChat:
+        componentes = self._obter_ollama()
+        return ComponentesChat(
+            gerador_resposta=GeradorRespostaOllama(
+                cliente=componentes.cliente,
+                catalogo_modelos=componentes.catalogo_modelos,
+                resolvedor_modelo=componentes.resolvedor_modelo_chat,
+                max_tokens_resposta=self._configuracoes.max_tokens_resposta,
+            ),
+            catalogo_modelos=componentes.catalogo_modelos,
+            seletor_modelo=SeletorModeloOllama(
+                componentes.catalogo_modelos,
+                componentes.resolvedor_modelo_chat,
+            ),
+        )
+
+    def _criar_embeddings_ollama(self) -> ComponentesEmbeddings:
+        componentes = self._obter_ollama()
+        return ComponentesEmbeddings(
+            gerador_embeddings=GeradorEmbeddingsOllama(
+                componentes.cliente,
+                self._configuracoes.modelo_embedding,
+            ),
+        )
+
     def _obter_lm_studio(self) -> _ComponentesLMStudio:
         if self._lm_studio is None:
             cliente = ClienteLMStudio(self._configuracoes.lm_studio_base_url)
@@ -202,6 +246,17 @@ class RegistroProvedores:
                 ),
             )
         return self._openai_compativel
+
+    def _obter_ollama(self) -> _ComponentesOllama:
+        if self._ollama is None:
+            cliente = ClienteOllama(self._configuracoes.ollama_base_url)
+            resolvedor = ResolvedorModeloChatOllama(_normalizar_modelo(self._configuracoes.modelo_chat))
+            self._ollama = _ComponentesOllama(
+                cliente=cliente,
+                resolvedor_modelo_chat=resolvedor,
+                catalogo_modelos=CatalogoModelosOllama(cliente, resolvedor),
+            )
+        return self._ollama
 
 
 def criar_componentes_provedores(configuracoes: Configuracoes) -> ComponentesProvedores:
