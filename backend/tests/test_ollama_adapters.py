@@ -152,6 +152,33 @@ class GeradorEmbeddingsOllamaTest(unittest.TestCase):
         self.assertEqual(resposta.vetor, (1.0, 2.0, 3.5))
         self.assertEqual(resposta.modelo, "nomic-embed-text")
 
+    def test_embeddings_em_lote_envia_lista_e_normaliza_vetores(self) -> None:
+        payloads: list[dict] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(str(request.url), "http://ollama.local:11434/api/embed")
+            payloads.append(json.loads(request.content.decode()))
+            return httpx.Response(
+                200,
+                json={"model": "nomic-embed-text", "embeddings": [[0.1], [0.2]]},
+            )
+
+        gerador = GeradorEmbeddingsOllama(
+            cliente_com_transporte(httpx.MockTransport(handler)),
+            modelo_embedding="nomic-embed-text",
+        )
+
+        respostas = gerador.gerar_embeddings(
+            (
+                SolicitacaoEmbedding(texto="primeiro texto"),
+                SolicitacaoEmbedding(texto="segundo texto"),
+            )
+        )
+
+        self.assertEqual(payloads, [{"model": "nomic-embed-text", "input": ["primeiro texto", "segundo texto"]}])
+        self.assertEqual([resposta.vetor for resposta in respostas], [(0.1,), (0.2,)])
+        self.assertEqual([resposta.modelo for resposta in respostas], ["nomic-embed-text", "nomic-embed-text"])
+
     def test_embeddings_converte_modelo_sem_capacidade(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(

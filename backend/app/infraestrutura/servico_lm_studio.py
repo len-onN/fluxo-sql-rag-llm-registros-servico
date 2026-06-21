@@ -52,5 +52,8 @@ class ServicoLMStudio:
     def gerar_embedding(self, solicitacao: SolicitacaoEmbedding) -> RespostaEmbedding:
         return self._gerador_embeddings.gerar_embedding(solicitacao)
 
+    def gerar_embeddings(self, solicitacoes: tuple[SolicitacaoEmbedding, ...]) -> tuple[RespostaEmbedding, ...]:
+        return self._gerador_embeddings.gerar_embeddings(solicitacoes)
+
     def responder(self, solicitacao: SolicitacaoLLM) -> RespostaLLM:
         return self._gerador_resposta.responder(solicitacao)

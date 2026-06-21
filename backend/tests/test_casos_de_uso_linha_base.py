@@ -300,6 +300,9 @@ class ReindexarRegistrosPendentesTest(unittest.TestCase):
         self.assertEqual(resultado.total_pendentes, 1)
         self.assertEqual(resultado.indexados, 1)
         self.assertEqual(resultado.erros, 0)
+        self.assertEqual(resultado.modelo_embedding, "modelo-teste")
+        self.assertEqual(resultado.ids_indexados, [1])
+        self.assertEqual(resultado.ids_com_erro, [])
         self.assertEqual(resultado.avisos, [])
         self.assertEqual(repositorio_registros.registros[0].estado_indexacao, EstadoIndexacao.INDEXADO)
 
@@ -320,6 +323,9 @@ class ReindexarRegistrosPendentesTest(unittest.TestCase):
         self.assertEqual(resultado.total_pendentes, 1)
         self.assertEqual(resultado.indexados, 0)
         self.assertEqual(resultado.erros, 1)
+        self.assertEqual(resultado.modelo_embedding, "modelo-teste")
+        self.assertEqual(resultado.ids_indexados, [])
+        self.assertEqual(resultado.ids_com_erro, [1])
         self.assertIn("Registro 1 nao indexado", resultado.avisos[0])
         self.assertEqual(repositorio_registros.registros[0].estado_indexacao, EstadoIndexacao.ERRO)
 
@@ -352,11 +358,15 @@ class RepositorioSQLiteIndexacaoTest(unittest.TestCase):
 
             with closing(sqlite3.connect(caminho_banco)) as conexao:
                 colunas = {linha[1] for linha in conexao.execute("pragma table_info(registros_servico)")}
+                indices = {linha[1] for linha in conexao.execute("pragma index_list(registros_servico)")}
 
         self.assertIn("indexado_em", colunas)
         self.assertIn("erro_indexacao", colunas)
         self.assertIn("modelo_embedding", colunas)
         self.assertIn("hash_conteudo_rag", colunas)
+        self.assertIn("idx_registros_servico_criado_em", indices)
+        self.assertIn("idx_registros_servico_indexacao_estado", indices)
+        self.assertIn("idx_registros_servico_indexacao_hash", indices)
 
     def test_repositorio_marca_indexacao_e_lista_pendentes(self) -> None:
         with TemporaryDirectory() as diretorio:
@@ -387,6 +397,32 @@ class RepositorioSQLiteIndexacaoTest(unittest.TestCase):
             self.assertEqual(indexado.estado_indexacao, EstadoIndexacao.INDEXADO)
             self.assertEqual(repositorio.listar_pendentes_indexacao("modelo-teste"), [])
             self.assertEqual([pendente.id for pendente in repositorio.listar_pendentes_indexacao("outro-modelo")], [1])
+
+    def test_repositorio_filtra_pendentes_sem_usar_listagem_completa(self) -> None:
+        with TemporaryDirectory() as diretorio:
+            caminho_banco = Path(diretorio) / "registros.db"
+            repositorio = RepositorioSQLiteRegistros(BancoSQLite(str(caminho_banco)))
+            registro = repositorio.salvar(criar_registro())
+            id_registro = registro.id or 0
+            repositorio.marcar_indexado(
+                id_registro=id_registro,
+                modelo_embedding="modelo-teste",
+                hash_conteudo_rag=registro.calcular_hash_conteudo_rag(),
+            )
+
+            with closing(sqlite3.connect(caminho_banco)) as conexao:
+                with conexao:
+                    conexao.execute(
+                        "update registros_servico set descricao = ? where id = ?",
+                        ("Descricao alterada depois da indexacao.", id_registro),
+                    )
+
+            def falhar_listar() -> list[RegistroServico]:
+                raise AssertionError("listar() nao deve ser chamado para encontrar pendentes.")
+
+            repositorio.listar = falhar_listar  # type: ignore[method-assign]
+
+            self.assertEqual([pendente.id for pendente in repositorio.listar_pendentes_indexacao("modelo-teste")], [1])
 
 
 class ConsultarRegistrosLinhaBaseTest(unittest.TestCase):

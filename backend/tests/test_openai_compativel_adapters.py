@@ -136,6 +136,39 @@ class GeradorEmbeddingsOpenAICompativelTest(unittest.TestCase):
         self.assertEqual(resposta.vetor, (1.0, 2.0, 3.5))
         self.assertEqual(resposta.modelo, "embedding-padrao")
 
+    def test_embeddings_em_lote_envia_lista_e_preserva_ordem(self) -> None:
+        payloads: list[dict] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(str(request.url), "https://openai.compat/v1/embeddings")
+            self.assertEqual(request.headers["authorization"], "Bearer token-teste")
+            payloads.append(json.loads(request.content.decode()))
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {"index": 1, "embedding": [0.2]},
+                        {"index": 0, "embedding": [0.1]},
+                    ]
+                },
+            )
+
+        gerador = GeradorEmbeddingsOpenAICompativel(
+            cliente=cliente_com_transporte(httpx.MockTransport(handler)),
+            modelo_embedding="embedding-padrao",
+        )
+
+        respostas = gerador.gerar_embeddings(
+            (
+                SolicitacaoEmbedding(texto="primeiro texto"),
+                SolicitacaoEmbedding(texto="segundo texto"),
+            )
+        )
+
+        self.assertEqual(payloads, [{"model": "embedding-padrao", "input": ["primeiro texto", "segundo texto"]}])
+        self.assertEqual([resposta.vetor for resposta in respostas], [(0.1,), (0.2,)])
+        self.assertEqual([resposta.modelo for resposta in respostas], ["embedding-padrao", "embedding-padrao"])
+
 
 if __name__ == "__main__":
     unittest.main()

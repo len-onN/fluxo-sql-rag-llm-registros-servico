@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from sqlite3 import Row
 
 from app.dominio.entidades import RegistroServico
-from app.infraestrutura.banco_sqlite import BancoSQLite
+from app.infraestrutura.banco_sqlite import BancoSQLite, NOME_FUNCAO_HASH_CONTEUDO_RAG
 
 
 class RepositorioSQLiteRegistros:
@@ -123,12 +123,46 @@ class RepositorioSQLiteRegistros:
         return self._mapear_linha(linha)
 
     def listar_pendentes_indexacao(self, modelo_embedding: str | None = None) -> list[RegistroServico]:
-        registros = self.listar()
-        return [
-            registro
-            for registro in registros
-            if self._precisa_indexar(registro, modelo_embedding)
-        ]
+        with closing(self._banco.conectar()) as conexao:
+            linhas = conexao.execute(
+                f"""
+                select
+                    id,
+                    funcionario,
+                    cliente_local,
+                    tipo_servico,
+                    status,
+                    descricao,
+                    problemas,
+                    observacoes,
+                    data_servico,
+                    criado_em,
+                    indexado_em,
+                    erro_indexacao,
+                    modelo_embedding,
+                    hash_conteudo_rag
+                from registros_servico
+                where
+                    indexado_em is null
+                    or coalesce(erro_indexacao, '') <> ''
+                    or hash_conteudo_rag is null
+                    or hash_conteudo_rag <> {NOME_FUNCAO_HASH_CONTEUDO_RAG}(
+                        funcionario,
+                        cliente_local,
+                        data_servico,
+                        tipo_servico,
+                        status,
+                        descricao,
+                        problemas,
+                        observacoes
+                    )
+                    or (? is not null and coalesce(modelo_embedding, '') <> ?)
+                order by datetime(criado_em) desc
+                """,
+                (modelo_embedding, modelo_embedding or ""),
+            ).fetchall()
+
+        return [self._mapear_linha(linha) for linha in linhas]
 
     def marcar_indexado(
         self,
@@ -206,16 +240,6 @@ class RepositorioSQLiteRegistros:
         if registro is None:
             raise ValueError(f"Registro {id_registro} nao encontrado.")
         return registro
-
-    def _precisa_indexar(self, registro: RegistroServico, modelo_embedding: str | None) -> bool:
-        if registro.indexado_em is None:
-            return True
-        if registro.erro_indexacao:
-            return True
-        if registro.hash_conteudo_rag != registro.calcular_hash_conteudo_rag():
-            return True
-        return modelo_embedding is not None and registro.modelo_embedding != modelo_embedding
-
 
 def _parse_datetime_opcional(valor: str | None) -> datetime | None:
     if not valor:

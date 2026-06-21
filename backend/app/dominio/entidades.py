@@ -34,19 +34,71 @@ class RegistroServico:
         return EstadoIndexacao.PENDENTE
 
     def texto_para_rag(self) -> str:
-        return "\n".join(
-            [
-                f"Funcionario: {self.funcionario}",
-                f"Cliente ou local: {self.cliente_local}",
-                f"Data do servico: {self.data_servico.isoformat()}",
-                f"Tipo de servico: {self.tipo_servico}",
-                f"Status: {self.status}",
-                f"Descricao: {self.descricao}",
-                f"Problemas encontrados: {self.problemas or 'Nao informado'}",
-                f"Observacoes importantes: {self.observacoes or 'Nao informado'}",
-            ]
+        return montar_texto_registro_para_rag(
+            funcionario=self.funcionario,
+            cliente_local=self.cliente_local,
+            data_servico=self.data_servico,
+            tipo_servico=self.tipo_servico,
+            status=self.status,
+            descricao=self.descricao,
+            problemas=self.problemas,
+            observacoes=self.observacoes,
         )
 
     def calcular_hash_conteudo_rag(self) -> str:
-        conteudo = self.texto_para_rag().encode("utf-8")
-        return hashlib.sha256(conteudo).hexdigest()
+        return calcular_hash_texto_rag(self.texto_para_rag())
+
+
+def montar_texto_registro_para_rag(
+    *,
+    funcionario: str,
+    cliente_local: str,
+    data_servico: date | str,
+    tipo_servico: str,
+    status: str,
+    descricao: str,
+    problemas: str | None,
+    observacoes: str | None,
+) -> str:
+    data_servico_texto = data_servico.isoformat() if isinstance(data_servico, date) else data_servico
+
+    return "\n".join(
+        [
+            f"Funcionario: {funcionario}",
+            f"Cliente ou local: {cliente_local}",
+            f"Data do servico: {data_servico_texto}",
+            f"Tipo de servico: {tipo_servico}",
+            f"Status: {status}",
+            f"Descricao: {descricao}",
+            f"Problemas encontrados: {problemas or 'Nao informado'}",
+            f"Observacoes importantes: {observacoes or 'Nao informado'}",
+        ]
+    )
+
+
+def calcular_hash_texto_rag(texto: str) -> str:
+    return hashlib.sha256(texto.encode("utf-8")).hexdigest()
+
+
+def calcular_hash_conteudo_rag_campos(
+    funcionario: str,
+    cliente_local: str,
+    data_servico: date | str,
+    tipo_servico: str,
+    status: str,
+    descricao: str,
+    problemas: str | None,
+    observacoes: str | None,
+) -> str:
+    return calcular_hash_texto_rag(
+        montar_texto_registro_para_rag(
+            funcionario=funcionario,
+            cliente_local=cliente_local,
+            data_servico=data_servico,
+            tipo_servico=tipo_servico,
+            status=status,
+            descricao=descricao,
+            problemas=problemas,
+            observacoes=observacoes,
+        )
+    )
