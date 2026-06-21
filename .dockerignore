@@ -1,0 +1,6 @@
+.git
+.codex_tmp
+dados
+__pycache__
+*.pyc
+.env

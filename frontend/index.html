@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Registro Inteligente de Serviços</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="js/main.js" type="module"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Prova de conceito RAG</p>
+            <h1>Registro Inteligente de Serviços</h1>
+          </div>
+          <div class="status-pill">
+            <span></span>
+            LM Studio local
+          </div>
+        </header>
+
+        <nav class="tabs" aria-label="Áreas da aplicação">
+          <button class="tab active" type="button" data-tab="novo">Novo registro</button>
+          <button class="tab" type="button" data-tab="registros">Registros</button>
+          <button class="tab" type="button" data-tab="consulta">Consulta IA</button>
+        </nav>
+
+        <section class="content-grid">
+          <form class="panel service-form tab-panel active" id="form-registro" data-panel="novo">
+            <div class="panel-heading">
+              <h2>Atividade do dia</h2>
+              <p>Os dados salvos no SQL serão enviados ao índice vetorial.</p>
+            </div>
+
+            <label>
+              Funcionário
+              <input name="funcionario" type="text" value="Marina Alves" required />
+            </label>
+
+            <label>
+              Cliente ou local
+              <input name="cliente_local" type="text" value="Condomínio Jardim Norte" required />
+            </label>
+
+            <div class="row">
+              <label>
+                Tipo de serviço
+                <select name="tipo_servico">
+                  <option>Manutenção preventiva</option>
+                  <option>Instalação</option>
+                  <option>Suporte técnico</option>
+                </select>
+              </label>
+
+              <label>
+                Status
+                <select name="status">
+                  <option>Concluído</option>
+                  <option>Pendente</option>
+                  <option>Com problema</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              Data
+              <input name="data_servico" type="date" required />
+            </label>
+
+            <label>
+              Descrição
+              <textarea name="descricao" required>Foi realizada revisão dos sensores, limpeza dos conectores e teste de comunicação com a central.</textarea>
+            </label>
+
+            <label>
+              Problemas encontrados
+              <textarea name="problemas">Sensor do bloco B apresentou instabilidade e deve ser acompanhado no próximo atendimento.</textarea>
+            </label>
+
+            <label>
+              Observações importantes
+              <textarea name="observacoes">Cliente solicitou prioridade para revisão dos sensores externos.</textarea>
+            </label>
+
+            <button class="primary-action" type="submit">Salvar e indexar</button>
+            <p class="feedback" id="feedback-registro" role="status"></p>
+          </form>
+
+          <section class="panel tab-panel" data-panel="registros">
+            <div class="panel-heading">
+              <h2>Registros salvos</h2>
+              <p>Listagem alimentada pelo banco SQL.</p>
+            </div>
+            <div class="lista-registros" id="lista-registros"></div>
+          </section>
+
+          <aside class="panel insight-panel tab-panel" data-panel="consulta">
+            <div class="panel-heading">
+              <h2>Consulta semântica</h2>
+              <p>Pergunta enviada ao fluxo RAG.</p>
+            </div>
+
+            <div class="modelo-box">
+              <div>
+                <strong>Modelo LLM</strong>
+                <p id="estado-modelo-chat">Verificando modelos carregados...</p>
+              </div>
+              <div class="modelo-controls">
+                <select id="modelo-chat" aria-label="Modelo LLM carregado"></select>
+                <button class="secondary-action" id="botao-atualizar-modelos" type="button">Atualizar</button>
+              </div>
+            </div>
+
+            <form id="form-consulta">
+              <label>
+                Pergunta
+                <textarea name="pergunta" required>Quais serviços tiveram problema com sensores?</textarea>
+              </label>
+              <button class="primary-action" type="submit">Consultar IA</button>
+            </form>
+
+            <div class="answer-box">
+              <strong>Resposta gerada</strong>
+              <p id="resposta-consulta">A resposta aparecerá aqui após a consulta.</p>
+            </div>
+
+            <div class="pipeline">
+              <div>Formulário</div>
+              <div>SQL</div>
+              <div>Embedding</div>
+              <div>ChromaDB</div>
+              <div>LLM</div>
+            </div>
+          </aside>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>
