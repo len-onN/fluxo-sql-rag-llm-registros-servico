@@ -220,6 +220,10 @@ $env:OPENAI_BASE_URL = "https://api.openai.com/v1"
 $env:MODELO_CHAT = ""
 $env:MODELO_EMBEDDING = "text-embedding-nomic-embed-text-v1.5"
 $env:LIMITE_CONTEXTO = "3"
+# opcionais para filtrar/limitar contexto RAG
+# $env:LIMIAR_DISTANCIA_CONTEXTO = "0.7"
+# $env:LIMIAR_PONTUACAO_CONTEXTO = "0.3"
+# $env:ORCAMENTO_CONTEXTO_CARACTERES = "6000"
 $env:MAX_TOKENS_RESPOSTA = "900"
 ```
 
@@ -234,6 +238,16 @@ Provedores implementados para chat e embeddings:
 - `ollama`: usa a API nativa local do Ollama em `OLLAMA_BASE_URL`. Configure
   `MODELO_CHAT` para o modelo de chat desejado e `MODELO_EMBEDDING` para um modelo
   que suporte embeddings.
+
+Politica de contexto RAG:
+
+- `LIMITE_CONTEXTO`: top-k padrao quando a consulta nao informa limite proprio.
+- `LIMIAR_DISTANCIA_CONTEXTO`: opcional; descarta contextos com distancia maior
+  que o valor configurado.
+- `LIMIAR_PONTUACAO_CONTEXTO`: opcional; descarta contextos com pontuacao menor
+  que o valor configurado.
+- `ORCAMENTO_CONTEXTO_CARACTERES`: opcional; limita o total aproximado de
+  caracteres enviados como contexto para a LLM.
 
 Suba a API:
 
@@ -288,6 +302,10 @@ Na aba de consulta:
 1. confirme ou selecione o modelo LLM carregado;
 2. escreva uma pergunta em linguagem natural;
 3. envie a consulta.
+
+A resposta da API mantem `contextos` como lista textual e tambem inclui `fontes`
+com metadados, distancia e pontuacao quando essas informacoes estiverem
+disponiveis no repositorio vetorial.
 
 Exemplo:
 
@@ -380,7 +398,7 @@ E a infraestrutura escolheria o adaptador concreto em tempo de configuracao.
 - Mostrar fontes e contextos recuperados na interface.
 - Adicionar filtros por funcionario, cliente, status e data.
 - Persistir historico de perguntas e respostas.
-- Configurar limiar de similaridade para evitar respostas com contexto fraco.
+- Ajustar limiares de similaridade por ambiente ou perfil de uso.
 - Criar avaliacao automatizada de qualidade da recuperacao.
 - Separar a integracao com LM Studio em componentes menores.
 - Adicionar autenticacao e controle de acesso.

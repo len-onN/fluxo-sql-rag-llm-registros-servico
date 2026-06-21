@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.aplicacao.casos_de_uso import CriarRegistroServico, ConsultarRegistros, ReindexarRegistrosPendentes
+from app.aplicacao.servicos import PoliticaContextoRAG
 from app.dominio.entidades import RegistroServico
 from app.dominio.objetos_valor import (
     ContextoRAG,
@@ -154,10 +155,12 @@ class GeradorRespostaFake:
     def __init__(self, eventos: list[str]) -> None:
         self.eventos = eventos
         self.chamadas: list[tuple[str, list[str]]] = []
+        self.prompts: list[str | None] = []
 
     def responder(self, solicitacao: SolicitacaoLLM) -> RespostaLLM:
         self.eventos.append("responder_llm")
         self.chamadas.append((solicitacao.pergunta, list(solicitacao.contextos)))
+        self.prompts.append(solicitacao.prompt_usuario)
         return RespostaLLM(texto="Resposta baseada nos registros recuperados.")
 
 
@@ -414,9 +417,47 @@ class ConsultarRegistrosLinhaBaseTest(unittest.TestCase):
         self.assertEqual(repositorio_vetorial.buscas[0][0].como_lista(), [0.1, 0.2, 0.3])
         self.assertEqual(repositorio_vetorial.buscas[0][1], 3)
         self.assertEqual(gerador_resposta.chamadas, [("Quais servicos foram concluidos?", [contexto_textual])])
+        self.assertEqual(
+            gerador_resposta.prompts,
+            [f"Contexto:\n{contexto_textual}\n\nPergunta:\nQuais servicos foram concluidos?"],
+        )
         self.assertEqual(resultado.contextos, [contexto_textual])
+        self.assertEqual(
+            resultado.fontes,
+            [
+                {
+                    "id_registro": 1,
+                    "fonte": "fake",
+                    "metadados": {"cliente_local": "Cliente Centro"},
+                    "distancia": None,
+                    "pontuacao": None,
+                }
+            ],
+        )
         self.assertEqual(resultado.resposta, "Resposta baseada nos registros recuperados.")
         self.assertIsNone(resultado.aviso)
+
+    def test_consulta_aplica_politica_de_contexto_antes_da_llm(self) -> None:
+        eventos: list[str] = []
+        contextos_rag = [
+            ContextoRAG(id_registro=1, documento="Contexto forte", distancia=0.2, fonte="fake"),
+            ContextoRAG(id_registro=2, documento="Contexto fraco", distancia=0.9, fonte="fake"),
+        ]
+        repositorio_vetorial = RepositorioVetorialFake(eventos, contextos=contextos_rag)
+        gerador_resposta = GeradorRespostaFake(eventos)
+        caso_de_uso = ConsultarRegistros(
+            repositorio_vetorial=repositorio_vetorial,
+            gerador_embeddings=GeradorEmbeddingsFake(eventos),
+            gerador_resposta=gerador_resposta,
+            politica_contexto=PoliticaContextoRAG(distancia_maxima=0.5),
+        )
+
+        resultado = caso_de_uso.executar("Qual contexto entra?", limite=5)
+
+        self.assertEqual(repositorio_vetorial.buscas[0][1], 5)
+        self.assertEqual(gerador_resposta.chamadas, [("Qual contexto entra?", ["Contexto forte"])])
+        self.assertEqual(resultado.contextos, ["Contexto forte"])
+        self.assertEqual(resultado.fontes[0]["id_registro"], 1)
 
     def test_consulta_retorna_aviso_quando_fluxo_rag_falha(self) -> None:
         eventos: list[str] = []
