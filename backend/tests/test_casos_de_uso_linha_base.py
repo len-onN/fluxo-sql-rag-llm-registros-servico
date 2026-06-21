@@ -300,6 +300,9 @@ class ReindexarRegistrosPendentesTest(unittest.TestCase):
         self.assertEqual(resultado.total_pendentes, 1)
         self.assertEqual(resultado.indexados, 1)
         self.assertEqual(resultado.erros, 0)
+        self.assertEqual(resultado.modelo_embedding, "modelo-teste")
+        self.assertEqual(resultado.ids_indexados, [1])
+        self.assertEqual(resultado.ids_com_erro, [])
         self.assertEqual(resultado.avisos, [])
         self.assertEqual(repositorio_registros.registros[0].estado_indexacao, EstadoIndexacao.INDEXADO)
 
@@ -320,6 +323,9 @@ class ReindexarRegistrosPendentesTest(unittest.TestCase):
         self.assertEqual(resultado.total_pendentes, 1)
         self.assertEqual(resultado.indexados, 0)
         self.assertEqual(resultado.erros, 1)
+        self.assertEqual(resultado.modelo_embedding, "modelo-teste")
+        self.assertEqual(resultado.ids_indexados, [])
+        self.assertEqual(resultado.ids_com_erro, [1])
         self.assertIn("Registro 1 nao indexado", resultado.avisos[0])
         self.assertEqual(repositorio_registros.registros[0].estado_indexacao, EstadoIndexacao.ERRO)
 

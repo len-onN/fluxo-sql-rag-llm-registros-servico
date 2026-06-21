@@ -26,7 +26,10 @@ class ResultadoReindexacao:
     total_pendentes: int
     indexados: int
     erros: int
+    modelo_embedding: str = "desconhecido"
     avisos: list[str] = field(default_factory=list)
+    ids_indexados: list[int] = field(default_factory=list)
+    ids_com_erro: list[int] = field(default_factory=list)
 
 
 class CriarRegistroServico:
@@ -98,6 +101,8 @@ class ReindexarRegistrosPendentes:
         indexados = 0
         erros = 0
         avisos: list[str] = []
+        ids_indexados: list[int] = []
+        ids_com_erro: list[int] = []
 
         for registro in pendentes:
             id_registro = _exigir_id_registro(registro)
@@ -114,6 +119,7 @@ class ReindexarRegistrosPendentes:
                     hash_conteudo_rag=hash_conteudo_rag,
                 )
                 indexados += 1
+                ids_indexados.append(id_registro)
             except Exception as erro:
                 self._repositorio_registros.marcar_erro_indexacao(
                     id_registro=id_registro,
@@ -122,13 +128,17 @@ class ReindexarRegistrosPendentes:
                     hash_conteudo_rag=hash_conteudo_rag,
                 )
                 erros += 1
+                ids_com_erro.append(id_registro)
                 avisos.append(f"Registro {id_registro} nao indexado: {erro}")
 
         return ResultadoReindexacao(
             total_pendentes=len(pendentes),
             indexados=indexados,
             erros=erros,
+            modelo_embedding=self._modelo_embedding,
             avisos=avisos,
+            ids_indexados=ids_indexados,
+            ids_com_erro=ids_com_erro,
         )
 
 
