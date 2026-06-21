@@ -13,6 +13,14 @@ from app.infraestrutura.provedores_llm.lm_studio import (
     SeletorModeloLMStudio,
 )
 from app.infraestrutura.provedores_llm.lm_studio.cliente import PROVEDOR as PROVEDOR_LM_STUDIO
+from app.infraestrutura.provedores_llm.openai_compativel import (
+    CatalogoModelosOpenAICompativel,
+    ClienteOpenAICompativel,
+    GeradorEmbeddingsOpenAICompativel,
+    GeradorRespostaOpenAICompativel,
+    SeletorModeloOpenAICompativel,
+)
+from app.infraestrutura.provedores_llm.openai_compativel.cliente import PROVEDOR as PROVEDOR_OPENAI_COMPATIVEL
 from app.nucleo.configuracoes import Configuracoes
 from app.nucleo.erros import ProvedorNaoSuportado
 
@@ -61,6 +69,12 @@ class _ComponentesLMStudio:
     catalogo_modelos: CatalogoModelosLMStudio
 
 
+@dataclass(slots=True)
+class _ComponentesOpenAICompativel:
+    cliente: ClienteOpenAICompativel
+    catalogo_modelos: CatalogoModelosOpenAICompativel
+
+
 ConstrutorChat = Callable[[], ComponentesChat]
 ConstrutorEmbeddings = Callable[[], ComponentesEmbeddings]
 
@@ -69,11 +83,14 @@ class RegistroProvedores:
     def __init__(self, configuracoes: Configuracoes) -> None:
         self._configuracoes = configuracoes
         self._lm_studio: _ComponentesLMStudio | None = None
+        self._openai_compativel: _ComponentesOpenAICompativel | None = None
         self._provedores_chat: dict[str, ConstrutorChat] = {
             PROVEDOR_LM_STUDIO: self._criar_chat_lm_studio,
+            PROVEDOR_OPENAI_COMPATIVEL: self._criar_chat_openai_compativel,
         }
         self._provedores_embeddings: dict[str, ConstrutorEmbeddings] = {
             PROVEDOR_LM_STUDIO: self._criar_embeddings_lm_studio,
+            PROVEDOR_OPENAI_COMPATIVEL: self._criar_embeddings_openai_compativel,
         }
 
     def criar(self) -> ComponentesProvedores:
@@ -140,6 +157,27 @@ class RegistroProvedores:
             ),
         )
 
+    def _criar_chat_openai_compativel(self) -> ComponentesChat:
+        componentes = self._obter_openai_compativel()
+        return ComponentesChat(
+            gerador_resposta=GeradorRespostaOpenAICompativel(
+                cliente=componentes.cliente,
+                modelo_chat=_normalizar_modelo(self._configuracoes.modelo_chat),
+                max_tokens_resposta=self._configuracoes.max_tokens_resposta,
+            ),
+            catalogo_modelos=componentes.catalogo_modelos,
+            seletor_modelo=SeletorModeloOpenAICompativel(componentes.catalogo_modelos),
+        )
+
+    def _criar_embeddings_openai_compativel(self) -> ComponentesEmbeddings:
+        componentes = self._obter_openai_compativel()
+        return ComponentesEmbeddings(
+            gerador_embeddings=GeradorEmbeddingsOpenAICompativel(
+                componentes.cliente,
+                self._configuracoes.modelo_embedding,
+            ),
+        )
+
     def _obter_lm_studio(self) -> _ComponentesLMStudio:
         if self._lm_studio is None:
             cliente = ClienteLMStudio(self._configuracoes.lm_studio_base_url)
@@ -150,6 +188,20 @@ class RegistroProvedores:
                 catalogo_modelos=CatalogoModelosLMStudio(cliente, resolvedor),
             )
         return self._lm_studio
+
+    def _obter_openai_compativel(self) -> _ComponentesOpenAICompativel:
+        if self._openai_compativel is None:
+            cliente = ClienteOpenAICompativel(
+                base_url=self._configuracoes.openai_base_url,
+                api_key=self._configuracoes.openai_api_key,
+            )
+            self._openai_compativel = _ComponentesOpenAICompativel(
+                cliente=cliente,
+                catalogo_modelos=CatalogoModelosOpenAICompativel(
+                    _normalizar_modelo(self._configuracoes.modelo_chat),
+                ),
+            )
+        return self._openai_compativel
 
 
 def criar_componentes_provedores(configuracoes: Configuracoes) -> ComponentesProvedores:
