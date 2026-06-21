@@ -38,6 +38,7 @@ class GeradorRespostaOllama:
     def responder(self, solicitacao: SolicitacaoLLM) -> RespostaLLM:
         contextos = list(solicitacao.contextos)
         contexto = "\n\n---\n\n".join(contextos) or "Nenhum contexto encontrado."
+        prompt_usuario = solicitacao.prompt_usuario or f"Contexto:\n{contexto}\n\nPergunta:\n{solicitacao.pergunta}"
         modelo_chat = _normalizar_modelo(solicitacao.modelo) or self._resolver_modelo_chat()
         temperatura = solicitacao.temperatura if solicitacao.temperatura is not None else 0.1
         max_tokens = solicitacao.max_tokens if solicitacao.max_tokens is not None else self._max_tokens_resposta
@@ -48,7 +49,7 @@ class GeradorRespostaOllama:
                 "model": modelo_chat,
                 "messages": [
                     {"role": "system", "content": INSTRUCOES_RESPOSTA},
-                    {"role": "user", "content": f"Contexto:\n{contexto}\n\nPergunta:\n{solicitacao.pergunta}"},
+                    {"role": "user", "content": prompt_usuario},
                 ],
                 "stream": False,
                 "options": {

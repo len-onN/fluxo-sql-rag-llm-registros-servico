@@ -14,6 +14,9 @@ class Configuracoes(BaseSettings):
     modelo_chat: str | None = None
     modelo_embedding: str = "text-embedding-nomic-embed-text-v1.5"
     limite_contexto: int = 3
+    limiar_distancia_contexto: float | None = None
+    limiar_pontuacao_contexto: float | None = None
+    orcamento_contexto_caracteres: int | None = None
     max_tokens_resposta: int = 900
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

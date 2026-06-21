@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from app.aplicacao.servicos import MontadorPromptRAG, PoliticaContextoRAG
 from app.dominio.entidades import RegistroServico
 from app.dominio.objetos_valor import SolicitacaoEmbedding, SolicitacaoLLM
 from app.dominio.portas import GeradorEmbeddings, GeradorResposta, RepositorioRegistros, RepositorioVetorial
@@ -16,6 +17,7 @@ class ResultadoCriacao:
 class ResultadoConsulta:
     resposta: str
     contextos: list[str]
+    fontes: list[dict[str, object]] = field(default_factory=list)
     aviso: str | None = None
 
 
@@ -136,18 +138,35 @@ class ConsultarRegistros:
         repositorio_vetorial: RepositorioVetorial,
         gerador_embeddings: GeradorEmbeddings,
         gerador_resposta: GeradorResposta,
+        politica_contexto: PoliticaContextoRAG | None = None,
+        montador_prompt: MontadorPromptRAG | None = None,
     ) -> None:
         self._repositorio_vetorial = repositorio_vetorial
         self._gerador_embeddings = gerador_embeddings
         self._gerador_resposta = gerador_resposta
+        self._politica_contexto = politica_contexto or PoliticaContextoRAG()
+        self._montador_prompt = montador_prompt or MontadorPromptRAG()
 
-    def executar(self, pergunta: str, limite: int) -> ResultadoConsulta:
+    def executar(self, pergunta: str, limite: int | None) -> ResultadoConsulta:
         try:
+            limite_busca = self._politica_contexto.limite_busca(limite)
             embedding = self._gerador_embeddings.gerar_embedding(SolicitacaoEmbedding(texto=pergunta))
-            contextos_rag = self._repositorio_vetorial.buscar_similares(embedding, limite)
-            contextos = [contexto.documento for contexto in contextos_rag]
-            resposta = self._gerador_resposta.responder(SolicitacaoLLM(pergunta=pergunta, contextos=tuple(contextos)))
-            return ResultadoConsulta(resposta=resposta.texto, contextos=contextos)
+            contextos_rag = self._repositorio_vetorial.buscar_similares(embedding, limite_busca)
+            contextos_selecionados = self._politica_contexto.selecionar(contextos_rag, limite_busca)
+            contextos = list(contextos_selecionados.documentos)
+            prompt_usuario = self._montador_prompt.montar_prompt_usuario(pergunta, contextos)
+            resposta = self._gerador_resposta.responder(
+                SolicitacaoLLM(
+                    pergunta=pergunta,
+                    contextos=tuple(contextos),
+                    prompt_usuario=prompt_usuario,
+                )
+            )
+            return ResultadoConsulta(
+                resposta=resposta.texto,
+                contextos=contextos,
+                fontes=[fonte.como_dict() for fonte in contextos_selecionados.fontes],
+            )
         except Exception as erro:
             return ResultadoConsulta(
                 resposta="Nao foi possivel consultar a base RAG neste momento.",

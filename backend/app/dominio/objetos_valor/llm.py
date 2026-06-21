@@ -31,6 +31,7 @@ class RespostaEmbedding:
 class SolicitacaoLLM:
     pergunta: str
     contextos: tuple[str, ...] = ()
+    prompt_usuario: str | None = None
     modelo: str | None = None
     temperatura: float | None = None
     max_tokens: int | None = None
@@ -38,6 +39,8 @@ class SolicitacaoLLM:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "contextos", tuple(str(contexto) for contexto in self.contextos))
+        if self.prompt_usuario is not None:
+            object.__setattr__(self, "prompt_usuario", str(self.prompt_usuario))
 
 
 @dataclass(frozen=True, slots=True)

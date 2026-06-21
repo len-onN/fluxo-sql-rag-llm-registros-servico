@@ -39,6 +39,7 @@ class GeradorRespostaLMStudio:
     def responder(self, solicitacao: SolicitacaoLLM) -> RespostaLLM:
         contextos = list(solicitacao.contextos)
         contexto = "\n\n---\n\n".join(contextos) or "Nenhum contexto encontrado."
+        prompt_usuario = solicitacao.prompt_usuario or f"Contexto:\n{contexto}\n\nPergunta:\n{solicitacao.pergunta}"
         modelo_chat = solicitacao.modelo or self._resolver_modelo_chat()
         temperatura = solicitacao.temperatura if solicitacao.temperatura is not None else 0.1
         max_tokens = solicitacao.max_tokens if solicitacao.max_tokens is not None else self._max_tokens_resposta
@@ -48,7 +49,7 @@ class GeradorRespostaLMStudio:
             json={
                 "model": modelo_chat,
                 "instructions": INSTRUCOES_RESPOSTA,
-                "input": f"Contexto:\n{contexto}\n\nPergunta:\n{solicitacao.pergunta}",
+                "input": prompt_usuario,
                 "temperature": temperatura,
                 "max_output_tokens": max_tokens,
                 "reasoning": {"effort": "minimal"},
