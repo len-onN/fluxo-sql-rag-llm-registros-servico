@@ -11,10 +11,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.aplicacao.casos_de_uso import CriarRegistroServico, ConsultarRegistros, ReindexarRegistrosPendentes
 from app.dominio.entidades import RegistroServico
-from app.dominio.objetos_valor import ContextoRAG, EstadoIndexacao
+from app.dominio.objetos_valor import (
+    ContextoRAG,
+    EstadoIndexacao,
+    RespostaEmbedding,
+    RespostaLLM,
+    SolicitacaoEmbedding,
+    SolicitacaoLLM,
+)
 from app.infraestrutura.banco_sqlite import BancoSQLite
 from app.infraestrutura.repositorio_sqlite_registros import RepositorioSQLiteRegistros
 from app.infraestrutura.repositorio_vetorial_chroma import RepositorioVetorialChroma
+from app.nucleo.erros import ErroProvedor, ModeloNaoEncontrado
 
 
 def criar_registro() -> RegistroServico:
@@ -115,42 +123,42 @@ class RepositorioVetorialFake:
     def __init__(self, eventos: list[str], contextos: list[ContextoRAG] | None = None) -> None:
         self.eventos = eventos
         self.contextos = contextos or []
-        self.indexados: list[tuple[RegistroServico, list[float]]] = []
-        self.buscas: list[tuple[list[float], int]] = []
+        self.indexados: list[tuple[RegistroServico, RespostaEmbedding]] = []
+        self.buscas: list[tuple[RespostaEmbedding, int]] = []
 
-    def indexar(self, registro: RegistroServico, embedding: list[float]) -> None:
+    def indexar(self, registro: RegistroServico, embedding: RespostaEmbedding) -> None:
         self.eventos.append("indexar_chroma")
         self.indexados.append((registro, embedding))
 
-    def buscar_similares(self, embedding: list[float], limite: int) -> list[ContextoRAG]:
+    def buscar_similares(self, embedding: RespostaEmbedding, limite: int) -> list[ContextoRAG]:
         self.eventos.append("buscar_chroma")
         self.buscas.append((embedding, limite))
         return list(self.contextos)
 
 
-class ServicoEmbeddingsFake:
+class GeradorEmbeddingsFake:
     def __init__(self, eventos: list[str], falhar: bool = False) -> None:
         self.eventos = eventos
         self.falhar = falhar
         self.textos: list[str] = []
 
-    def gerar_embedding(self, texto: str) -> list[float]:
+    def gerar_embedding(self, solicitacao: SolicitacaoEmbedding) -> RespostaEmbedding:
         self.eventos.append("gerar_embedding")
-        self.textos.append(texto)
+        self.textos.append(solicitacao.texto)
         if self.falhar:
             raise RuntimeError("LM Studio indisponivel")
-        return [0.1, 0.2, 0.3]
+        return RespostaEmbedding(vetor=(0.1, 0.2, 0.3), modelo=solicitacao.modelo)
 
 
-class ServicoLLMFake:
+class GeradorRespostaFake:
     def __init__(self, eventos: list[str]) -> None:
         self.eventos = eventos
         self.chamadas: list[tuple[str, list[str]]] = []
 
-    def responder(self, pergunta: str, contextos: list[str]) -> str:
+    def responder(self, solicitacao: SolicitacaoLLM) -> RespostaLLM:
         self.eventos.append("responder_llm")
-        self.chamadas.append((pergunta, list(contextos)))
-        return "Resposta baseada nos registros recuperados."
+        self.chamadas.append((solicitacao.pergunta, list(solicitacao.contextos)))
+        return RespostaLLM(texto="Resposta baseada nos registros recuperados.")
 
 
 class ColecaoChromaFake:
@@ -174,6 +182,25 @@ class ColecaoChromaFake:
             ],
             "distances": [[0.25]],
         }
+
+
+class ContratosLLMTest(unittest.TestCase):
+    def test_resposta_embedding_normaliza_vetor_e_expoe_dimensoes(self) -> None:
+        resposta = RespostaEmbedding(vetor=[1, 2.5, "3"])
+
+        self.assertEqual(resposta.vetor, (1.0, 2.5, 3.0))
+        self.assertEqual(resposta.como_lista(), [1.0, 2.5, 3.0])
+        self.assertEqual(resposta.dimensoes, 3)
+
+
+class ErrosProvedorTest(unittest.TestCase):
+    def test_erro_tipado_preserva_contexto_do_provedor(self) -> None:
+        erro = ModeloNaoEncontrado("Modelo ausente.", provedor="lm_studio", modelo="modelo-b")
+
+        self.assertIsInstance(erro, ErroProvedor)
+        self.assertEqual(str(erro), "Modelo ausente.")
+        self.assertEqual(erro.provedor, "lm_studio")
+        self.assertEqual(erro.modelo, "modelo-b")
 
 
 class RegistroServicoLinhaBaseTest(unittest.TestCase):
@@ -200,11 +227,11 @@ class RegistroServicoLinhaBaseTest(unittest.TestCase):
         eventos: list[str] = []
         repositorio_registros = RepositorioRegistrosFake(eventos)
         repositorio_vetorial = RepositorioVetorialFake(eventos)
-        servico_embeddings = ServicoEmbeddingsFake(eventos)
+        gerador_embeddings = GeradorEmbeddingsFake(eventos)
         caso_de_uso = CriarRegistroServico(
             repositorio_registros=repositorio_registros,
             repositorio_vetorial=repositorio_vetorial,
-            servico_embeddings=servico_embeddings,
+            gerador_embeddings=gerador_embeddings,
             modelo_embedding="modelo-teste",
         )
 
@@ -225,11 +252,11 @@ class RegistroServicoLinhaBaseTest(unittest.TestCase):
         eventos: list[str] = []
         repositorio_registros = RepositorioRegistrosFake(eventos)
         repositorio_vetorial = RepositorioVetorialFake(eventos)
-        servico_embeddings = ServicoEmbeddingsFake(eventos, falhar=True)
+        gerador_embeddings = GeradorEmbeddingsFake(eventos, falhar=True)
         caso_de_uso = CriarRegistroServico(
             repositorio_registros=repositorio_registros,
             repositorio_vetorial=repositorio_vetorial,
-            servico_embeddings=servico_embeddings,
+            gerador_embeddings=gerador_embeddings,
             modelo_embedding="modelo-teste",
         )
 
@@ -253,11 +280,11 @@ class ReindexarRegistrosPendentesTest(unittest.TestCase):
         registro_pendente = criar_registro().com_id(1)
         repositorio_registros.registros.append(registro_pendente)
         repositorio_vetorial = RepositorioVetorialFake(eventos)
-        servico_embeddings = ServicoEmbeddingsFake(eventos)
+        gerador_embeddings = GeradorEmbeddingsFake(eventos)
         caso_de_uso = ReindexarRegistrosPendentes(
             repositorio_registros=repositorio_registros,
             repositorio_vetorial=repositorio_vetorial,
-            servico_embeddings=servico_embeddings,
+            gerador_embeddings=gerador_embeddings,
             modelo_embedding="modelo-teste",
         )
 
@@ -280,7 +307,7 @@ class ReindexarRegistrosPendentesTest(unittest.TestCase):
         caso_de_uso = ReindexarRegistrosPendentes(
             repositorio_registros=repositorio_registros,
             repositorio_vetorial=RepositorioVetorialFake(eventos),
-            servico_embeddings=ServicoEmbeddingsFake(eventos, falhar=True),
+            gerador_embeddings=GeradorEmbeddingsFake(eventos, falhar=True),
             modelo_embedding="modelo-teste",
         )
 
@@ -372,19 +399,21 @@ class ConsultarRegistrosLinhaBaseTest(unittest.TestCase):
             )
         ]
         repositorio_vetorial = RepositorioVetorialFake(eventos, contextos=contextos_rag)
-        servico_embeddings = ServicoEmbeddingsFake(eventos)
-        servico_llm = ServicoLLMFake(eventos)
+        gerador_embeddings = GeradorEmbeddingsFake(eventos)
+        gerador_resposta = GeradorRespostaFake(eventos)
         caso_de_uso = ConsultarRegistros(
             repositorio_vetorial=repositorio_vetorial,
-            servico_embeddings=servico_embeddings,
-            servico_llm=servico_llm,
+            gerador_embeddings=gerador_embeddings,
+            gerador_resposta=gerador_resposta,
         )
 
         resultado = caso_de_uso.executar("Quais servicos foram concluidos?", limite=3)
 
         self.assertEqual(eventos, ["gerar_embedding", "buscar_chroma", "responder_llm"])
-        self.assertEqual(repositorio_vetorial.buscas, [([0.1, 0.2, 0.3], 3)])
-        self.assertEqual(servico_llm.chamadas, [("Quais servicos foram concluidos?", [contexto_textual])])
+        self.assertEqual(len(repositorio_vetorial.buscas), 1)
+        self.assertEqual(repositorio_vetorial.buscas[0][0].como_lista(), [0.1, 0.2, 0.3])
+        self.assertEqual(repositorio_vetorial.buscas[0][1], 3)
+        self.assertEqual(gerador_resposta.chamadas, [("Quais servicos foram concluidos?", [contexto_textual])])
         self.assertEqual(resultado.contextos, [contexto_textual])
         self.assertEqual(resultado.resposta, "Resposta baseada nos registros recuperados.")
         self.assertIsNone(resultado.aviso)
@@ -393,8 +422,8 @@ class ConsultarRegistrosLinhaBaseTest(unittest.TestCase):
         eventos: list[str] = []
         caso_de_uso = ConsultarRegistros(
             repositorio_vetorial=RepositorioVetorialFake(eventos),
-            servico_embeddings=ServicoEmbeddingsFake(eventos, falhar=True),
-            servico_llm=ServicoLLMFake(eventos),
+            gerador_embeddings=GeradorEmbeddingsFake(eventos, falhar=True),
+            gerador_resposta=GeradorRespostaFake(eventos),
         )
 
         resultado = caso_de_uso.executar("Quais registros existem?", limite=3)
@@ -410,7 +439,7 @@ class RepositorioVetorialChromaLinhaBaseTest(unittest.TestCase):
         repositorio = object.__new__(RepositorioVetorialChroma)
         repositorio._colecao = colecao
 
-        contextos = repositorio.buscar_similares([0.1, 0.2, 0.3], limite=2)
+        contextos = repositorio.buscar_similares(RespostaEmbedding(vetor=(0.1, 0.2, 0.3)), limite=2)
 
         self.assertEqual(
             colecao.consultas,

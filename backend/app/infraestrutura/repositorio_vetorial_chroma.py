@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.dominio.entidades import RegistroServico
-from app.dominio.objetos_valor import ContextoRAG, ValorMetadado
+from app.dominio.objetos_valor import ContextoRAG, RespostaEmbedding, ValorMetadado
 
 
 NOME_COLECAO = "registros_servico"
@@ -15,13 +15,13 @@ class RepositorioVetorialChroma:
         cliente = chromadb.PersistentClient(path=diretorio_chroma)
         self._colecao = cliente.get_or_create_collection(name=NOME_COLECAO)
 
-    def indexar(self, registro: RegistroServico, embedding: list[float]) -> None:
+    def indexar(self, registro: RegistroServico, embedding: RespostaEmbedding) -> None:
         if registro.id is None:
             raise ValueError("Registro precisa estar salvo antes da indexacao vetorial.")
 
         self._colecao.upsert(
             ids=[str(registro.id)],
-            embeddings=[embedding],
+            embeddings=[embedding.como_lista()],
             documents=[registro.texto_para_rag()],
             metadatas=[
                 {
@@ -35,9 +35,9 @@ class RepositorioVetorialChroma:
             ],
         )
 
-    def buscar_similares(self, embedding: list[float], limite: int) -> list[ContextoRAG]:
+    def buscar_similares(self, embedding: RespostaEmbedding, limite: int) -> list[ContextoRAG]:
         resultado = self._colecao.query(
-            query_embeddings=[embedding],
+            query_embeddings=[embedding.como_lista()],
             n_results=limite,
             include=["documents", "metadatas", "distances"],
         )

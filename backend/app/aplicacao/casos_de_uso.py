@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 
 from app.dominio.entidades import RegistroServico
-from app.dominio.portas import RepositorioRegistros, RepositorioVetorial, ServicoEmbeddings, ServicoLLM
+from app.dominio.objetos_valor import SolicitacaoEmbedding, SolicitacaoLLM
+from app.dominio.portas import GeradorEmbeddings, GeradorResposta, RepositorioRegistros, RepositorioVetorial
 
 
 @dataclass(slots=True)
@@ -31,12 +32,12 @@ class CriarRegistroServico:
         self,
         repositorio_registros: RepositorioRegistros,
         repositorio_vetorial: RepositorioVetorial,
-        servico_embeddings: ServicoEmbeddings,
+        gerador_embeddings: GeradorEmbeddings,
         modelo_embedding: str = "desconhecido",
     ) -> None:
         self._repositorio_registros = repositorio_registros
         self._repositorio_vetorial = repositorio_vetorial
-        self._servico_embeddings = servico_embeddings
+        self._gerador_embeddings = gerador_embeddings
         self._modelo_embedding = modelo_embedding
 
     def executar(self, registro: RegistroServico) -> ResultadoCriacao:
@@ -45,7 +46,9 @@ class CriarRegistroServico:
         id_registro = _exigir_id_registro(registro_salvo)
 
         try:
-            embedding = self._servico_embeddings.gerar_embedding(registro_salvo.texto_para_rag())
+            embedding = self._gerador_embeddings.gerar_embedding(
+                SolicitacaoEmbedding(texto=registro_salvo.texto_para_rag(), modelo=self._modelo_embedding)
+            )
             self._repositorio_vetorial.indexar(registro_salvo, embedding)
             registro_indexado = self._repositorio_registros.marcar_indexado(
                 id_registro=id_registro,
@@ -80,12 +83,12 @@ class ReindexarRegistrosPendentes:
         self,
         repositorio_registros: RepositorioRegistros,
         repositorio_vetorial: RepositorioVetorial,
-        servico_embeddings: ServicoEmbeddings,
+        gerador_embeddings: GeradorEmbeddings,
         modelo_embedding: str = "desconhecido",
     ) -> None:
         self._repositorio_registros = repositorio_registros
         self._repositorio_vetorial = repositorio_vetorial
-        self._servico_embeddings = servico_embeddings
+        self._gerador_embeddings = gerador_embeddings
         self._modelo_embedding = modelo_embedding
 
     def executar(self) -> ResultadoReindexacao:
@@ -99,7 +102,9 @@ class ReindexarRegistrosPendentes:
             hash_conteudo_rag = registro.calcular_hash_conteudo_rag()
 
             try:
-                embedding = self._servico_embeddings.gerar_embedding(registro.texto_para_rag())
+                embedding = self._gerador_embeddings.gerar_embedding(
+                    SolicitacaoEmbedding(texto=registro.texto_para_rag(), modelo=self._modelo_embedding)
+                )
                 self._repositorio_vetorial.indexar(registro, embedding)
                 self._repositorio_registros.marcar_indexado(
                     id_registro=id_registro,
@@ -129,20 +134,20 @@ class ConsultarRegistros:
     def __init__(
         self,
         repositorio_vetorial: RepositorioVetorial,
-        servico_embeddings: ServicoEmbeddings,
-        servico_llm: ServicoLLM,
+        gerador_embeddings: GeradorEmbeddings,
+        gerador_resposta: GeradorResposta,
     ) -> None:
         self._repositorio_vetorial = repositorio_vetorial
-        self._servico_embeddings = servico_embeddings
-        self._servico_llm = servico_llm
+        self._gerador_embeddings = gerador_embeddings
+        self._gerador_resposta = gerador_resposta
 
     def executar(self, pergunta: str, limite: int) -> ResultadoConsulta:
         try:
-            embedding = self._servico_embeddings.gerar_embedding(pergunta)
+            embedding = self._gerador_embeddings.gerar_embedding(SolicitacaoEmbedding(texto=pergunta))
             contextos_rag = self._repositorio_vetorial.buscar_similares(embedding, limite)
             contextos = [contexto.documento for contexto in contextos_rag]
-            resposta = self._servico_llm.responder(pergunta, contextos)
-            return ResultadoConsulta(resposta=resposta, contextos=contextos)
+            resposta = self._gerador_resposta.responder(SolicitacaoLLM(pergunta=pergunta, contextos=tuple(contextos)))
+            return ResultadoConsulta(resposta=resposta.texto, contextos=contextos)
         except Exception as erro:
             return ResultadoConsulta(
                 resposta="Nao foi possivel consultar a base RAG neste momento.",

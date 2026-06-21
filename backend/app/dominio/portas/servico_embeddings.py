@@ -1,6 +1,6 @@
-from typing import Protocol
+from app.dominio.portas.gerador_embeddings import GeradorEmbeddings
 
 
-class ServicoEmbeddings(Protocol):
-    def gerar_embedding(self, texto: str) -> list[float]:
-        ...
+ServicoEmbeddings = GeradorEmbeddings
+
+__all__ = ["ServicoEmbeddings"]
