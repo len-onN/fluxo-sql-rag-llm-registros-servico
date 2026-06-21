@@ -6,6 +6,7 @@ from app.aplicacao.casos_de_uso import (
     ListarRegistrosServico,
     ReindexarRegistrosPendentes,
 )
+from app.dominio.portas import CatalogoModelos, GeradorEmbeddings, GeradorResposta, SeletorModelo
 from app.infraestrutura.banco_sqlite import BancoSQLite
 from app.infraestrutura.repositorio_sqlite_registros import RepositorioSQLiteRegistros
 from app.infraestrutura.repositorio_vetorial_chroma import RepositorioVetorialChroma
@@ -19,7 +20,10 @@ class ContainerAplicacao:
     listar_registros_servico: ListarRegistrosServico
     reindexar_registros_pendentes: ReindexarRegistrosPendentes
     consultar_registros: ConsultarRegistros
-    servico_lm_studio: ServicoLMStudio
+    gerador_embeddings: GeradorEmbeddings
+    gerador_resposta: GeradorResposta
+    catalogo_modelos: CatalogoModelos
+    seletor_modelo: SeletorModelo
 
 
 def criar_container(configuracoes: Configuracoes) -> ContainerAplicacao:
@@ -36,20 +40,23 @@ def criar_container(configuracoes: Configuracoes) -> ContainerAplicacao:
         criar_registro_servico=CriarRegistroServico(
             repositorio_registros=repositorio_registros,
             repositorio_vetorial=repositorio_vetorial,
-            servico_embeddings=servico_lm_studio,
+            gerador_embeddings=servico_lm_studio,
             modelo_embedding=configuracoes.modelo_embedding,
         ),
         listar_registros_servico=ListarRegistrosServico(repositorio_registros),
         reindexar_registros_pendentes=ReindexarRegistrosPendentes(
             repositorio_registros=repositorio_registros,
             repositorio_vetorial=repositorio_vetorial,
-            servico_embeddings=servico_lm_studio,
+            gerador_embeddings=servico_lm_studio,
             modelo_embedding=configuracoes.modelo_embedding,
         ),
         consultar_registros=ConsultarRegistros(
             repositorio_vetorial=repositorio_vetorial,
-            servico_embeddings=servico_lm_studio,
-            servico_llm=servico_lm_studio,
+            gerador_embeddings=servico_lm_studio,
+            gerador_resposta=servico_lm_studio,
         ),
-        servico_lm_studio=servico_lm_studio,
+        gerador_embeddings=servico_lm_studio,
+        gerador_resposta=servico_lm_studio,
+        catalogo_modelos=servico_lm_studio,
+        seletor_modelo=servico_lm_studio,
     )

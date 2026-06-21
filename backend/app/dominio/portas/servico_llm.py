@@ -1,6 +1,6 @@
-from typing import Protocol
+from app.dominio.portas.gerador_resposta import GeradorResposta
 
 
-class ServicoLLM(Protocol):
-    def responder(self, pergunta: str, contextos: list[str]) -> str:
-        ...
+ServicoLLM = GeradorResposta
+
+__all__ = ["ServicoLLM"]

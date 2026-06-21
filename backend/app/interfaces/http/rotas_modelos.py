@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 from app.infraestrutura.container import ContainerAplicacao
 from app.interfaces.http.dependencias import obter_container
+from app.nucleo.erros import ErroProvedor, ModeloNaoEncontrado
 
 roteador = APIRouter(prefix="/api/modelos", tags=["modelos"])
 
@@ -28,7 +29,7 @@ class SelecaoModeloEntrada(BaseModel):
 
 @roteador.get("/chat", response_model=EstadoModelosChatSaida)
 def obter_modelos_chat(container: ContainerAplicacao = Depends(obter_container)) -> dict:
-    return container.servico_lm_studio.obter_estado_modelos_chat()
+    return container.catalogo_modelos.obter_estado_modelos_chat().como_dict()
 
 
 @roteador.post("/chat/selecionar", response_model=EstadoModelosChatSaida)
@@ -37,6 +38,8 @@ def selecionar_modelo_chat(
     container: ContainerAplicacao = Depends(obter_container),
 ) -> dict:
     try:
-        return container.servico_lm_studio.selecionar_modelo_chat(entrada.modelo)
-    except ValueError as erro:
+        return container.seletor_modelo.selecionar_modelo_chat(entrada.modelo).como_dict()
+    except ModeloNaoEncontrado as erro:
         raise HTTPException(status_code=400, detail=str(erro)) from erro
+    except ErroProvedor as erro:
+        raise HTTPException(status_code=503, detail=str(erro)) from erro
