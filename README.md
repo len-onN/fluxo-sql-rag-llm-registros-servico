@@ -7,7 +7,7 @@ A ideia central e manter o SQLite como fonte primaria dos registros operacionais
 usar o ChromaDB como uma camada derivada de busca semantica. Cada registro salvo no
 SQL e transformado em texto, convertido em embedding e indexado no banco vetorial.
 Depois, uma pergunta em linguagem natural tambem vira embedding, recupera registros
-similares e envia esses contextos para uma LLM local via LM Studio.
+similares e envia esses contextos para o provedor de LLM configurado.
 
 ## Objetivo
 
@@ -22,7 +22,7 @@ O prototipo cobre:
 - cadastro de registros de servico;
 - persistencia dos dados originais em SQLite;
 - controle do estado de indexacao no proprio SQL;
-- geracao de embeddings via LM Studio;
+- geracao de embeddings via provedor configurado;
 - indexacao e busca semantica com ChromaDB;
 - consulta em linguagem natural com resposta gerada por LLM;
 - frontend simples em HTML, CSS e JavaScript puro;
@@ -47,7 +47,7 @@ backend/app/
   nucleo/          configuracoes da aplicacao
   dominio/         entidade, objetos de valor e portas
   aplicacao/       casos de uso
-  infraestrutura/  SQLite, ChromaDB, LM Studio e container
+  infraestrutura/  SQLite, ChromaDB, provedores de LLM e container
   interfaces/http/ rotas FastAPI
 ```
 
@@ -68,7 +68,7 @@ Pontos importantes da arquitetura:
 - **Banco SQL:** SQLite.
 - **Banco vetorial:** ChromaDB persistido em disco.
 - **Cliente HTTP:** httpx.
-- **LLM e embeddings:** LM Studio local ou provedor OpenAI-compatible configurado.
+- **LLM e embeddings:** LM Studio, Ollama local ou provedor OpenAI-compatible configurado.
 - **Execucao containerizada:** Docker Compose.
 
 ## Estrutura do Repositorio
@@ -99,13 +99,13 @@ Para rodar com Docker:
 
 - Docker;
 - Docker Compose;
-- LM Studio instalado e com servidor local ativo.
+- LM Studio ou Ollama instalado e com servidor local ativo.
 
 Para rodar sem Docker:
 
 - Python 3.12;
 - pip;
-- LM Studio instalado e com servidor local ativo.
+- LM Studio ou Ollama instalado e com servidor local ativo.
 
 ## Preparar o LM Studio
 
@@ -136,6 +136,34 @@ text-embedding-nomic-embed-text-v1.5
 
 Se houver apenas uma LLM carregada no LM Studio, ela sera usada automaticamente. Se
 houver mais de uma, a interface exibira um seletor antes da consulta.
+
+## Preparar o Ollama
+
+O Ollama deve estar aberto separadamente da aplicacao e com os modelos locais
+baixados.
+
+1. Instale e inicie o Ollama.
+2. Baixe um modelo de chat, por exemplo `ollama pull llama3.2`.
+3. Baixe um modelo de embedding, por exemplo `ollama pull nomic-embed-text`.
+4. Configure `PROVEDOR_CHAT=ollama`, `PROVEDOR_EMBEDDINGS=ollama`,
+   `MODELO_CHAT` e `MODELO_EMBEDDING`.
+
+Servidor esperado fora do Docker:
+
+```text
+http://localhost:11434
+```
+
+Quando a aplicacao roda em Docker, o container acessa o Ollama no host por:
+
+```text
+http://host.docker.internal:11434
+```
+
+O adapter usa `POST /api/chat` para respostas e `POST /api/embed` para embeddings.
+Ollama lista modelos locais, mas nem todo modelo suporta todas as capacidades; se um
+modelo de chat for usado como embedding, a aplicacao retorna erro tipado de
+capacidade nao suportada.
 
 ## Rodar com Docker
 
@@ -186,6 +214,7 @@ $env:DIRETORIO_CHROMA = "dados/chroma"
 $env:PROVEDOR_CHAT = "lm_studio"
 $env:PROVEDOR_EMBEDDINGS = "lm_studio"
 $env:LM_STUDIO_BASE_URL = "http://localhost:1234/v1"
+$env:OLLAMA_BASE_URL = "http://localhost:11434"
 $env:OPENAI_API_KEY = ""
 $env:OPENAI_BASE_URL = "https://api.openai.com/v1"
 $env:MODELO_CHAT = ""
@@ -202,6 +231,9 @@ Provedores implementados para chat e embeddings:
 - `openai_compativel`: usa endpoints compativeis com `/chat/completions` e
   `/embeddings`. Configure `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `MODELO_CHAT` e
   `MODELO_EMBEDDING` conforme o provedor escolhido.
+- `ollama`: usa a API nativa local do Ollama em `OLLAMA_BASE_URL`. Configure
+  `MODELO_CHAT` para o modelo de chat desejado e `MODELO_EMBEDDING` para um modelo
+  que suporte embeddings.
 
 Suba a API:
 
@@ -240,7 +272,7 @@ Ao salvar, a aplicacao:
 
 1. grava o registro no SQLite;
 2. gera o texto semantico do registro;
-3. solicita o embedding ao LM Studio;
+3. solicita o embedding ao provedor configurado;
 4. indexa o documento no ChromaDB;
 5. marca no SQLite se a indexacao foi concluida ou falhou.
 
@@ -300,7 +332,7 @@ docker compose config
 
 Teste manual recomendado:
 
-1. Inicie o LM Studio.
+1. Inicie o provedor configurado, como LM Studio ou Ollama.
 2. Suba a aplicacao com Docker ou Uvicorn.
 3. Cadastre um registro pela interface.
 4. Abra a aba "Registros" e confirme que ele aparece.
@@ -312,13 +344,11 @@ Teste manual recomendado:
 
 ### Integrar com mais fontes de LLMs
 
-A arquitetura ja possui portas para embeddings e geracao de resposta. Depois do
-adapter OpenAI-compatible, os proximos adaptadores naturais sao:
+A arquitetura ja possui portas para embeddings e geracao de resposta. Depois dos
+adapters OpenAI-compatible e Ollama, os proximos adaptadores naturais sao:
 
 - **Azure OpenAI:** alternativa para ambientes corporativos que precisam de governanca,
   controle de acesso e integracao com recursos Azure.
-- **Ollama:** opcao local para executar modelos abertos diretamente na maquina ou em
-  servidor proprio, mantendo dados fora de provedores externos.
 - **Google Gemini:** provedor de modelos generativos e embeddings, util para comparar
   qualidade de respostas e recuperacao em outro ecossistema.
 - **Anthropic Claude:** boa opcao para geracao textual; para embeddings, pode ser
@@ -330,17 +360,17 @@ adapter OpenAI-compatible, os proximos adaptadores naturais sao:
 - **Hugging Face Inference ou Text Embeddings Inference:** caminho para hospedar ou
   consumir modelos abertos de embeddings com maior controle tecnico.
 
-Uma evolucao recomendada e criar uma configuracao de provedor:
+A configuracao atual de provedores segue este formato:
 
 ```text
-PROVEDOR_LLM=lm_studio | openai | azure_openai | ollama | gemini | openrouter
-PROVEDOR_EMBEDDINGS=lm_studio | openai | huggingface | ollama
+PROVEDOR_CHAT=lm_studio | openai_compativel | ollama
+PROVEDOR_EMBEDDINGS=lm_studio | openai_compativel | ollama
 ```
 
 Com isso, os casos de uso continuariam dependendo das mesmas portas:
 
-- `ServicoEmbeddings`
-- `ServicoLLM`
+- `GeradorEmbeddings`
+- `GeradorResposta`
 
 E a infraestrutura escolheria o adaptador concreto em tempo de configuracao.
 
