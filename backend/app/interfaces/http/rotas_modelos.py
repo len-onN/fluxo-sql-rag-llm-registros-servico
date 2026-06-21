@@ -23,8 +23,20 @@ class EstadoModelosChatSaida(BaseModel):
     aviso: str | None = None
 
 
+class EstadoProvedoresSaida(BaseModel):
+    provedor_chat: str
+    provedor_embeddings: str
+    modelo_chat: str | None = None
+    modelo_embedding: str
+
+
 class SelecaoModeloEntrada(BaseModel):
     modelo: str = Field(min_length=1)
+
+
+@roteador.get("/provedor", response_model=EstadoProvedoresSaida)
+def obter_provedor_ativo(container: ContainerAplicacao = Depends(obter_container)) -> dict:
+    return container.estado_provedores.como_dict()
 
 
 @roteador.get("/chat", response_model=EstadoModelosChatSaida)

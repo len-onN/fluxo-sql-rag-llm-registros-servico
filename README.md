@@ -35,9 +35,9 @@ Usuario
   -> Frontend HTML/CSS/JS
   -> API FastAPI
   -> SQLite como fonte primaria
-  -> LM Studio para embeddings
+  -> provedor configurado para embeddings
   -> ChromaDB como projecao vetorial
-  -> LM Studio para resposta da LLM
+  -> provedor configurado para resposta da LLM
 ```
 
 O backend esta dividido em camadas:
@@ -183,11 +183,18 @@ Configure as variaveis para execucao local:
 $env:PYTHONPATH = "backend"
 $env:BANCO_SQLITE = "dados/registros.db"
 $env:DIRETORIO_CHROMA = "dados/chroma"
+$env:PROVEDOR_CHAT = "lm_studio"
+$env:PROVEDOR_EMBEDDINGS = "lm_studio"
 $env:LM_STUDIO_BASE_URL = "http://localhost:1234/v1"
+$env:MODELO_CHAT = ""
 $env:MODELO_EMBEDDING = "text-embedding-nomic-embed-text-v1.5"
 $env:LIMITE_CONTEXTO = "3"
 $env:MAX_TOKENS_RESPOSTA = "900"
 ```
+
+Por enquanto, `lm_studio` e o unico provedor implementado para chat e embeddings.
+`MODELO_CHAT` pode apontar para o id da instancia carregada ou para a chave do
+modelo no LM Studio; quando vazio, a aplicacao usa a selecao feita pela interface.
 
 Suba a API:
 
@@ -260,6 +267,7 @@ os contextos recuperados para a LLM responder.
 | `GET` | `/api/registros` | Lista registros salvos no SQLite. |
 | `POST` | `/api/registros` | Cria registro e tenta indexar no RAG. |
 | `POST` | `/api/consulta` | Executa consulta semantica com LLM. |
+| `GET` | `/api/modelos/provedor` | Mostra provedores e modelos configurados. |
 | `GET` | `/api/modelos/chat` | Lista modelos LLM carregados no LM Studio. |
 | `POST` | `/api/modelos/chat/selecionar` | Seleciona o modelo de chat ativo. |
 
@@ -341,4 +349,3 @@ E a infraestrutura escolheria o adaptador concreto em tempo de configuracao.
 - Criar avaliacao automatizada de qualidade da recuperacao.
 - Separar a integracao com LM Studio em componentes menores.
 - Adicionar autenticacao e controle de acesso.
-
