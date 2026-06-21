@@ -8,19 +8,17 @@ from .cliente import PROVEDOR
 
 
 class ResolvedorModeloChatLMStudio:
-    def __init__(self) -> None:
-        self._modelo_chat_selecionado: str | None = None
+    def __init__(self, modelo_chat_inicial: str | None = None) -> None:
+        self._modelo_chat_selecionado = modelo_chat_inicial
 
     def selecionar(self, modelo_id: str) -> None:
         self._modelo_chat_selecionado = modelo_id
 
     def resolver(self, modelos: Sequence[ModeloChat], exigir_resolucao: bool) -> str | None:
-        ids_carregados = {modelo.id for modelo in modelos}
-
-        if self._modelo_chat_selecionado and self._modelo_chat_selecionado in ids_carregados:
-            return self._modelo_chat_selecionado
-
-        if self._modelo_chat_selecionado and self._modelo_chat_selecionado not in ids_carregados:
+        if self._modelo_chat_selecionado:
+            modelo_resolvido = self._resolver_modelo_configurado(modelos, self._modelo_chat_selecionado)
+            if modelo_resolvido is not None:
+                return modelo_resolvido
             self._modelo_chat_selecionado = None
 
         if len(modelos) == 1:
@@ -32,6 +30,12 @@ class ResolvedorModeloChatLMStudio:
                 provedor=PROVEDOR,
             )
 
+        return None
+
+    def _resolver_modelo_configurado(self, modelos: Sequence[ModeloChat], modelo_configurado: str) -> str | None:
+        for modelo in modelos:
+            if modelo.id == modelo_configurado or modelo.modelo == modelo_configurado:
+                return modelo.id
         return None
 
 

@@ -5,7 +5,10 @@ class Configuracoes(BaseSettings):
     nome_aplicacao: str = "Registro Inteligente de Servicos"
     banco_sqlite: str = "dados/registros.db"
     diretorio_chroma: str = "dados/chroma"
+    provedor_chat: str = "lm_studio"
+    provedor_embeddings: str = "lm_studio"
     lm_studio_base_url: str = "http://localhost:1234/v1"
+    modelo_chat: str | None = None
     modelo_embedding: str = "text-embedding-nomic-embed-text-v1.5"
     limite_contexto: int = 3
     max_tokens_resposta: int = 900
