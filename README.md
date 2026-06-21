@@ -68,7 +68,7 @@ Pontos importantes da arquitetura:
 - **Banco SQL:** SQLite.
 - **Banco vetorial:** ChromaDB persistido em disco.
 - **Cliente HTTP:** httpx.
-- **LLM e embeddings:** LM Studio com endpoints locais.
+- **LLM e embeddings:** LM Studio local ou provedor OpenAI-compatible configurado.
 - **Execucao containerizada:** Docker Compose.
 
 ## Estrutura do Repositorio
@@ -186,15 +186,22 @@ $env:DIRETORIO_CHROMA = "dados/chroma"
 $env:PROVEDOR_CHAT = "lm_studio"
 $env:PROVEDOR_EMBEDDINGS = "lm_studio"
 $env:LM_STUDIO_BASE_URL = "http://localhost:1234/v1"
+$env:OPENAI_API_KEY = ""
+$env:OPENAI_BASE_URL = "https://api.openai.com/v1"
 $env:MODELO_CHAT = ""
 $env:MODELO_EMBEDDING = "text-embedding-nomic-embed-text-v1.5"
 $env:LIMITE_CONTEXTO = "3"
 $env:MAX_TOKENS_RESPOSTA = "900"
 ```
 
-Por enquanto, `lm_studio` e o unico provedor implementado para chat e embeddings.
-`MODELO_CHAT` pode apontar para o id da instancia carregada ou para a chave do
-modelo no LM Studio; quando vazio, a aplicacao usa a selecao feita pela interface.
+Provedores implementados para chat e embeddings:
+
+- `lm_studio`: padrao local. `MODELO_CHAT` pode apontar para o id da instancia
+  carregada ou para a chave do modelo no LM Studio; quando vazio, a aplicacao usa a
+  selecao feita pela interface.
+- `openai_compativel`: usa endpoints compativeis com `/chat/completions` e
+  `/embeddings`. Configure `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `MODELO_CHAT` e
+  `MODELO_EMBEDDING` conforme o provedor escolhido.
 
 Suba a API:
 
@@ -268,8 +275,8 @@ os contextos recuperados para a LLM responder.
 | `POST` | `/api/registros` | Cria registro e tenta indexar no RAG. |
 | `POST` | `/api/consulta` | Executa consulta semantica com LLM. |
 | `GET` | `/api/modelos/provedor` | Mostra provedores e modelos configurados. |
-| `GET` | `/api/modelos/chat` | Lista modelos LLM carregados no LM Studio. |
-| `POST` | `/api/modelos/chat/selecionar` | Seleciona o modelo de chat ativo. |
+| `GET` | `/api/modelos/chat` | Mostra o estado dos modelos de chat do provedor ativo. |
+| `POST` | `/api/modelos/chat/selecionar` | Seleciona o modelo de chat ativo quando o provedor permitir. |
 
 ## Como Testar
 
@@ -305,11 +312,9 @@ Teste manual recomendado:
 
 ### Integrar com mais fontes de LLMs
 
-A arquitetura ja possui portas para embeddings e geracao de resposta. O proximo passo
-natural e criar adaptadores adicionais alem do LM Studio:
+A arquitetura ja possui portas para embeddings e geracao de resposta. Depois do
+adapter OpenAI-compatible, os proximos adaptadores naturais sao:
 
-- **OpenAI API:** usar modelos hospedados para chat e embeddings, com boa estabilidade
-  operacional e baixa friccao de integracao.
 - **Azure OpenAI:** alternativa para ambientes corporativos que precisam de governanca,
   controle de acesso e integracao com recursos Azure.
 - **Ollama:** opcao local para executar modelos abertos diretamente na maquina ou em
