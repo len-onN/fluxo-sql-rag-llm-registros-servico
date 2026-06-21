@@ -8,6 +8,7 @@ class Configuracoes(BaseSettings):
     provedor_chat: str = "lm_studio"
     provedor_embeddings: str = "lm_studio"
     lm_studio_base_url: str = "http://localhost:1234/v1"
+    ollama_base_url: str = "http://localhost:11434"
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     modelo_chat: str | None = None
