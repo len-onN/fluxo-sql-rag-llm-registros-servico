@@ -1,0 +1,59 @@
+{
+  "versao": 1,
+  "descricao": "Dataset minimo para comparacao de qualidade do fluxo RAG em registros de servico.",
+  "registros": [
+    {
+      "id": 101,
+      "funcionario": "Ana Silva",
+      "cliente_local": "Cliente Centro",
+      "tipo_servico": "Manutencao preventiva",
+      "status": "Concluido",
+      "descricao": "Verificacao geral dos equipamentos de rede.",
+      "problemas": "Sem falhas criticas.",
+      "observacoes": "Retornar em 30 dias.",
+      "data_servico": "2026-06-18"
+    },
+    {
+      "id": 102,
+      "funcionario": "Bruno Costa",
+      "cliente_local": "Cliente Norte",
+      "tipo_servico": "Correcao eletrica",
+      "status": "Pendente",
+      "descricao": "Sensor de temperatura apresentou oscilacao durante teste.",
+      "problemas": "Necessario substituir conector do sensor.",
+      "observacoes": "Agendar retorno com peca reserva.",
+      "data_servico": "2026-06-19"
+    },
+    {
+      "id": 103,
+      "funcionario": "Carla Ramos",
+      "cliente_local": "Cliente Sul",
+      "tipo_servico": "Instalacao",
+      "status": "Concluido",
+      "descricao": "Instalacao de roteador e validacao de cobertura Wi-Fi.",
+      "problemas": "Sinal fraco no deposito antes do reposicionamento.",
+      "observacoes": "Cliente aprovou teste final.",
+      "data_servico": "2026-06-20"
+    }
+  ],
+  "casos": [
+    {
+      "id": "servicos-com-sensor",
+      "pergunta": "Quais servicos mencionaram problema com sensor?",
+      "ids_registros_esperados": [102],
+      "termos_resposta_esperados": ["sensor", "Bruno Costa", "Pendente"]
+    },
+    {
+      "id": "retorno-em-trinta-dias",
+      "pergunta": "Qual cliente precisa de retorno em 30 dias?",
+      "ids_registros_esperados": [101],
+      "termos_resposta_esperados": ["Cliente Centro", "30 dias", "Ana Silva"]
+    },
+    {
+      "id": "validacao-wifi",
+      "pergunta": "Onde houve validacao de cobertura Wi-Fi?",
+      "ids_registros_esperados": [103],
+      "termos_resposta_esperados": ["Cliente Sul", "Wi-Fi", "Carla Ramos"]
+    }
+  ]
+}

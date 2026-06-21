@@ -24,6 +24,7 @@ from app.infraestrutura.banco_sqlite import BancoSQLite
 from app.infraestrutura.repositorio_sqlite_registros import RepositorioSQLiteRegistros
 from app.infraestrutura.repositorio_vetorial_chroma import RepositorioVetorialChroma
 from app.nucleo.erros import ErroProvedor, ModeloNaoEncontrado
+from app.nucleo.observabilidade import MetadadosConsultaRAG, ObservadorConsultaRAG
 
 
 def criar_registro() -> RegistroServico:
@@ -472,6 +473,7 @@ class ConsultarRegistrosLinhaBaseTest(unittest.TestCase):
         )
         self.assertEqual(resultado.resposta, "Resposta baseada nos registros recuperados.")
         self.assertIsNone(resultado.aviso)
+        self.assertTrue(resultado.metricas["sucesso"])
 
     def test_consulta_aplica_politica_de_contexto_antes_da_llm(self) -> None:
         eventos: list[str] = []
@@ -495,12 +497,64 @@ class ConsultarRegistrosLinhaBaseTest(unittest.TestCase):
         self.assertEqual(resultado.contextos, ["Contexto forte"])
         self.assertEqual(resultado.fontes[0]["id_registro"], 1)
 
+    def test_consulta_emite_metricas_sem_expor_prompt_ou_contexto_completo(self) -> None:
+        eventos: list[str] = []
+        contexto_textual = "Funcionario: Ana Silva\nCliente ou local: Cliente Centro"
+        observador = ObservadorConsultaRAG(guardar_resumos=True)
+        caso_de_uso = ConsultarRegistros(
+            repositorio_vetorial=RepositorioVetorialFake(
+                eventos,
+                contextos=[ContextoRAG(id_registro=1, documento=contexto_textual, fonte="fake")],
+            ),
+            gerador_embeddings=GeradorEmbeddingsFake(eventos),
+            gerador_resposta=GeradorRespostaFake(eventos),
+            observador=observador,
+            metadados_observabilidade=MetadadosConsultaRAG(
+                provedor_chat="lm_studio",
+                provedor_embeddings="ollama",
+                modelo_chat="modelo-chat",
+                modelo_embedding="modelo-embedding",
+            ),
+        )
+
+        resultado = caso_de_uso.executar("Quais servicos foram concluidos?", limite=3)
+
+        self.assertEqual(len(observador.resumos_emitidos), 1)
+        resumo = observador.resumos_emitidos[0].como_dict()
+        self.assertEqual(resultado.metricas, resumo)
+        self.assertTrue(resumo["sucesso"])
+        self.assertEqual(resumo["caso_de_uso"], "consultar_registros")
+        self.assertEqual(resumo["provedor_chat"], "lm_studio")
+        self.assertEqual(resumo["provedor_embeddings"], "ollama")
+        self.assertEqual(resumo["modelo_chat"], "modelo-chat")
+        self.assertEqual(resumo["modelo_embedding"], "modelo-embedding")
+        self.assertEqual(resumo["total_contextos_recuperados"], 1)
+        self.assertEqual(resumo["total_contextos_usados"], 1)
+        self.assertEqual(resumo["caracteres_contexto"], len(contexto_textual))
+        self.assertGreaterEqual(resumo["duracao_ms"], 0)
+        self.assertEqual(
+            [etapa["nome"] for etapa in resumo["etapas"]],
+            [
+                "definir_limite_busca",
+                "gerar_embedding_pergunta",
+                "buscar_contextos_vetoriais",
+                "selecionar_contextos",
+                "montar_prompt_rag",
+                "gerar_resposta_llm",
+            ],
+        )
+        self.assertNotIn("pergunta", resumo)
+        self.assertNotIn("prompt_usuario", resumo)
+        self.assertNotIn("contextos", resumo)
+
     def test_consulta_retorna_aviso_quando_fluxo_rag_falha(self) -> None:
         eventos: list[str] = []
+        observador = ObservadorConsultaRAG(guardar_resumos=True)
         caso_de_uso = ConsultarRegistros(
             repositorio_vetorial=RepositorioVetorialFake(eventos),
             gerador_embeddings=GeradorEmbeddingsFake(eventos, falhar=True),
             gerador_resposta=GeradorRespostaFake(eventos),
+            observador=observador,
         )
 
         resultado = caso_de_uso.executar("Quais registros existem?", limite=3)
@@ -508,6 +562,9 @@ class ConsultarRegistrosLinhaBaseTest(unittest.TestCase):
         self.assertEqual(resultado.resposta, "Nao foi possivel consultar a base RAG neste momento.")
         self.assertEqual(resultado.contextos, [])
         self.assertIn("LM Studio indisponivel", resultado.aviso or "")
+        self.assertFalse(resultado.metricas["sucesso"])
+        self.assertEqual(resultado.metricas["erro_tipo"], "RuntimeError")
+        self.assertEqual(observador.resumos_emitidos[0].erro_tipo, "RuntimeError")
 
 
 class RepositorioVetorialChromaLinhaBaseTest(unittest.TestCase):

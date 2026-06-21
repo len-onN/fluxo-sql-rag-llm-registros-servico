@@ -13,6 +13,7 @@ from app.infraestrutura.provedores_llm import EstadoProvedoresAtivos, criar_comp
 from app.infraestrutura.repositorio_sqlite_registros import RepositorioSQLiteRegistros
 from app.infraestrutura.repositorio_vetorial_chroma import RepositorioVetorialChroma
 from app.nucleo.configuracoes import Configuracoes
+from app.nucleo.observabilidade import MetadadosConsultaRAG, ObservadorConsultaRAG
 
 
 @dataclass(slots=True)
@@ -33,6 +34,7 @@ def criar_container(configuracoes: Configuracoes) -> ContainerAplicacao:
     repositorio_registros = RepositorioSQLiteRegistros(banco)
     repositorio_vetorial = RepositorioVetorialChroma(configuracoes.diretorio_chroma)
     provedores = criar_componentes_provedores(configuracoes)
+    observador_consulta = ObservadorConsultaRAG()
     politica_contexto = PoliticaContextoRAG(
         top_k_padrao=configuracoes.limite_contexto,
         distancia_maxima=configuracoes.limiar_distancia_contexto,
@@ -61,6 +63,13 @@ def criar_container(configuracoes: Configuracoes) -> ContainerAplicacao:
             gerador_resposta=provedores.gerador_resposta,
             politica_contexto=politica_contexto,
             montador_prompt=montador_prompt,
+            observador=observador_consulta,
+            metadados_observabilidade=MetadadosConsultaRAG(
+                provedor_chat=provedores.estado.provedor_chat,
+                provedor_embeddings=provedores.estado.provedor_embeddings,
+                modelo_chat=provedores.estado.modelo_chat,
+                modelo_embedding=provedores.estado.modelo_embedding,
+            ),
         ),
         gerador_embeddings=provedores.gerador_embeddings,
         gerador_resposta=provedores.gerador_resposta,

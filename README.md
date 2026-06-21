@@ -249,6 +249,13 @@ Politica de contexto RAG:
 - `ORCAMENTO_CONTEXTO_CARACTERES`: opcional; limita o total aproximado de
   caracteres enviados como contexto para a LLM.
 
+Observabilidade da consulta RAG:
+
+- cada consulta emite um log JSON no logger `app.observabilidade.rag`;
+- o evento informa provedor/modelo configurado, duracao total, duracao por etapa,
+  quantidade de contextos recuperados/usados e tamanho agregado do contexto;
+- por padrao, o log nao inclui pergunta, prompt nem texto completo dos contextos.
+
 Suba a API:
 
 ```powershell
@@ -341,6 +348,9 @@ Rodar testes unitarios:
 ```bash
 python -m unittest discover -s backend/tests
 ```
+
+O dataset em `backend/tests/fixtures/dataset_regressao_rag.json` traz perguntas e
+respostas esperadas para comparacao de qualidade do RAG em execucoes locais.
 
 Validar o Docker Compose:
 
