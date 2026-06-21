@@ -4,6 +4,7 @@ from app.aplicacao.servicos import MontadorPromptRAG, PoliticaContextoRAG
 from app.dominio.entidades import RegistroServico
 from app.dominio.objetos_valor import SolicitacaoEmbedding, SolicitacaoLLM
 from app.dominio.portas import GeradorEmbeddings, GeradorResposta, RepositorioRegistros, RepositorioVetorial
+from app.nucleo.observabilidade import MetadadosConsultaRAG, ObservadorConsultaRAG
 
 
 @dataclass(slots=True)
@@ -19,6 +20,7 @@ class ResultadoConsulta:
     contextos: list[str]
     fontes: list[dict[str, object]] = field(default_factory=list)
     aviso: str | None = None
+    metricas: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -150,38 +152,61 @@ class ConsultarRegistros:
         gerador_resposta: GeradorResposta,
         politica_contexto: PoliticaContextoRAG | None = None,
         montador_prompt: MontadorPromptRAG | None = None,
+        observador: ObservadorConsultaRAG | None = None,
+        metadados_observabilidade: MetadadosConsultaRAG | None = None,
     ) -> None:
         self._repositorio_vetorial = repositorio_vetorial
         self._gerador_embeddings = gerador_embeddings
         self._gerador_resposta = gerador_resposta
         self._politica_contexto = politica_contexto or PoliticaContextoRAG()
         self._montador_prompt = montador_prompt or MontadorPromptRAG()
+        self._observador = observador or ObservadorConsultaRAG()
+        self._metadados_observabilidade = metadados_observabilidade or MetadadosConsultaRAG()
 
     def executar(self, pergunta: str, limite: int | None) -> ResultadoConsulta:
+        execucao = self._observador.iniciar(self._metadados_observabilidade)
         try:
-            limite_busca = self._politica_contexto.limite_busca(limite)
-            embedding = self._gerador_embeddings.gerar_embedding(SolicitacaoEmbedding(texto=pergunta))
-            contextos_rag = self._repositorio_vetorial.buscar_similares(embedding, limite_busca)
-            contextos_selecionados = self._politica_contexto.selecionar(contextos_rag, limite_busca)
+            with execucao.medir("definir_limite_busca"):
+                limite_busca = self._politica_contexto.limite_busca(limite)
+            with execucao.medir("gerar_embedding_pergunta"):
+                embedding = self._gerador_embeddings.gerar_embedding(SolicitacaoEmbedding(texto=pergunta))
+            with execucao.medir("buscar_contextos_vetoriais"):
+                contextos_rag = self._repositorio_vetorial.buscar_similares(embedding, limite_busca)
+            with execucao.medir("selecionar_contextos"):
+                contextos_selecionados = self._politica_contexto.selecionar(contextos_rag, limite_busca)
             contextos = list(contextos_selecionados.documentos)
-            prompt_usuario = self._montador_prompt.montar_prompt_usuario(pergunta, contextos)
-            resposta = self._gerador_resposta.responder(
-                SolicitacaoLLM(
-                    pergunta=pergunta,
-                    contextos=tuple(contextos),
-                    prompt_usuario=prompt_usuario,
+            with execucao.medir("montar_prompt_rag"):
+                prompt_usuario = self._montador_prompt.montar_prompt_usuario(pergunta, contextos)
+            with execucao.medir("gerar_resposta_llm"):
+                resposta = self._gerador_resposta.responder(
+                    SolicitacaoLLM(
+                        pergunta=pergunta,
+                        contextos=tuple(contextos),
+                        prompt_usuario=prompt_usuario,
+                    )
                 )
+            resumo = execucao.resumo_sucesso(
+                total_contextos_recuperados=len(contextos_rag),
+                total_contextos_usados=len(contextos),
+                caracteres_contexto=sum(len(contexto) for contexto in contextos),
+                modelo_chat_resposta=resposta.modelo,
+                modelo_embedding_resposta=embedding.modelo,
             )
+            self._observador.emitir(resumo)
             return ResultadoConsulta(
                 resposta=resposta.texto,
                 contextos=contextos,
                 fontes=[fonte.como_dict() for fonte in contextos_selecionados.fontes],
+                metricas=resumo.como_dict(),
             )
         except Exception as erro:
+            resumo = execucao.resumo_falha(erro)
+            self._observador.emitir(resumo)
             return ResultadoConsulta(
                 resposta="Nao foi possivel consultar a base RAG neste momento.",
                 contextos=[],
                 aviso=str(erro),
+                metricas=resumo.como_dict(),
             )
 
 
